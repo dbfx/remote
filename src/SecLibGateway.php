@@ -83,8 +83,12 @@ class SecLibGateway implements GatewayInterface
 
     protected function loadRsaKey(array $auth)
     {
-        return PublicKeyLoader::load($this->readRsaKey($auth), Arr::get($auth, 'keyphrase'));
+        return PublicKeyLoader::load(
+            $this->readRsaKey($auth), 
+            Arr::get($auth, 'keyphrase')
+        )->withFormat('PKCS1');
     }
+
 
     protected function readRsaKey(array $auth)
     {
