@@ -9,6 +9,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use phpseclib3\System\SSH\Agent;
 use Illuminate\Filesystem\Filesystem;
+use phpseclib3\Crypt\PublicKeyLoader;
 
 class SecLibGateway implements GatewayInterface
 {
@@ -192,9 +193,8 @@ class SecLibGateway implements GatewayInterface
      */
     protected function loadRsaKey(array $auth)
     {
-        with($key = $this->getKey($auth))->loadKey($this->readRsaKey($auth));
-
-        return $key;
+        $key = $this->readRsaKey($auth);
+        return PublicKeyLoader::load($key, Arr::get($auth, 'keyphrase'));
     }
 
     /**
@@ -211,15 +211,11 @@ class SecLibGateway implements GatewayInterface
         return $key;
     }
 
-    /**
-     * Get a new RSA key instance.
-     *
-     * @return \phpseclib\Crypt\RSA
-     */
     public function getNewKey()
     {
-        return new RSA();
+        return PublicKeyLoader::load('');
     }
+
 
     /**
      * Read the contents of the RSA key.
@@ -247,23 +243,15 @@ class SecLibGateway implements GatewayInterface
         return $this->timeout;
     }
 
-    /**
-     * Set timeout.
-     *
-     * $ssh->exec('ping 127.0.0.1'); on a Linux host will never return
-     * and will run indefinitely. setTimeout() makes it so it'll timeout.
-     * Setting $timeout to false or 0 will mean there is no timeout.
-     *
-     * @param int $timeout
-     */
     public function setTimeout($timeout)
     {
         $this->timeout = (int) $timeout;
-
+        
         if ($this->connection) {
-            $this->connection->setTimeout($this->timeout);
+            $this->connection->setTimeout($this->timeout ?: 10); // Default to 10 if timeout is 0
         }
     }
+
 
     /**
      * Determine if the gateway is connected.
@@ -307,10 +295,11 @@ class SecLibGateway implements GatewayInterface
      *
      * @return string
      */
-    public function getString($remote)
-    {
-        return $this->getConnection()->get($remote);
-    }
+     public function getString($remote)
+     {
+        $content = $this->getConnection()->get($remote);
+        return $content !== false ? $content : '';
+     }
 
     /**
      * Upload a local file to the server.
@@ -347,7 +336,7 @@ class SecLibGateway implements GatewayInterface
      */
     public function exists($remote)
     {
-        return $this->getConnection()->file_exists($remote);
+        return $this->getConnection()->is_file($remote);
     }
 
     /**
@@ -382,10 +371,9 @@ class SecLibGateway implements GatewayInterface
      */
     public function nextLine()
     {
-        $value = $this->getConnection()->_get_channel_packet(SSH2::CHANNEL_EXEC);
-
-        return $value === true ? null : $value;
+        return $this->getConnection()->read();
     }
+
 
     /**
      * Get the exit status of the last command.
